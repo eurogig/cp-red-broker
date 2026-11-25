@@ -85,6 +85,8 @@ If the connection is refused, check Ollama is running and its listening interfac
 
 Copy the supplied example, or save the JSON below as `runner.ollama.json` in the repository root. Choose a target name unique to your test before running:
 
+See the [examples index](../examples/README.md) for configurations covering supplied profiles, system prompts and tool schemas, existing targets, and instrumented indirect scans.
+
 ```sh
 cp examples/ollama.json runner.ollama.json
 ```
@@ -151,6 +153,8 @@ Choose exactly one target mode:
 | `"targetName": "local-deepseek-r1"` | Create/reuse by name; automatically recon only when no profile exists |
 | `"targetId": "ID_FROM_SUMMARY"` | Reuse with no recon; supplying `red.groundTruth` updates the target before scanning |
 | `"targetProfile": {"name": "...", "appContext": {...}}` | Supply and replace the named target's profile; no automatic recon |
+
+Choose a scan mode in `red.strategy`: `static` for Standard-style fixed probes, `crescendo` for adaptive multi-turn attacks, `tool-response-poisoning` for indirect attacks through traced tools, or `datasetId` for a dataset already uploaded in Red. The SDK also supports a `smoke` strategy for a short canned-probe check. See [examples/README.md](../examples/README.md) for working config shapes and strategy-specific options. The runner exposes attack counts per objective through `numberOfProbes`/`numberOfAttacksPerObjective`, depending on the strategy.
 
 ### Supplying ground truth
 
@@ -244,7 +248,7 @@ The consumer returns the report's gate exit code, so exit 1 can still mean integ
 
 ## Verification status
 
-As of 2026-11-24, all 27 local tests pass, including real HTTP. The private Compose demo, host-mounted reports and SDK-equipped image build are verified. SDK 0.13.0 is locked and its basic contract tested with simulated transport on the host and in Docker. **The Ollama walkthrough, live Red assessments and Kubernetes execution still need end-to-end testing.** npm audit reports a high-severity Zod advisory affecting the SDK dependency tree; release review remains open. See [verification](verification.md).
+As of 2026-11-25, 28 local tests pass and one network-listener test is skipped in the restricted environment. Five installed-SDK contract tests pass with simulated transport, covering the available scan modes and target settings. The private Compose demo, host-mounted reports and SDK-equipped image build were verified previously. **The Ollama walkthrough, live Red assessments and Kubernetes execution still need end-to-end testing.** npm audit reports a high-severity Zod advisory affecting the SDK dependency tree; release review remains open. See [verification](verification.md).
 
 ## Local development without Docker
 
@@ -265,7 +269,7 @@ The default Node demo uses an in-process target with no network listener. Use `n
 
 - Fixed-destination OpenAI-compatible, generic JSON and caller-session-ID adapters.
 - Concurrent isolated conversations, deadlines, bounded requests/responses, no redirects or automatic target retries.
-- SDK target creation with first-use recon, supplied profiles, explicit recon refresh or existing target reuse; bundled default catalog and inline custom objectives, with installed-package contract checks.
+- SDK target creation with first-use recon, supplied profiles, explicit recon refresh or existing target reuse; standard/static, adaptive/crescendo, tool-response-poisoning, dataset and smoke scan configuration; bundled default catalog and inline custom objectives, with installed-package contract checks.
 - JSON summaries, JUnit verdicts, opt-in sensitive SDK result snapshots, hashes and terminal manifests.
 - Non-root container stages, private Compose demo, Kubernetes Jobs/CronJobs and Helm.
 - Unit/component and process lifecycle tests, synthetic target and live validation procedure.

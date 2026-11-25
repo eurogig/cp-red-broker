@@ -21,12 +21,15 @@ See the [AI Red Teaming overview](https://docs.lakera.ai/red), [getting-started 
 - **Customer-controlled execution:** configure target connectivity, secrets, concurrency, time limits, and output locally; run as a Docker container, Kubernetes Job/CronJob, or CI task.
 - **Automation-ready results:** write JSON summaries and JUnit verdicts to a mounted directory, with manifests for integrity checks and configurable pass/fail gates.
 - **Multiple endpoint styles:** call OpenAI-compatible or generic JSON endpoints, or connect to a stateful endpoint with isolated session IDs.
+- **Repeatable test suites:** choose generated objective scans or run a pre-existing Red dataset through the same private runner.
 
 This repository provides a lightweight runner, not a managed or vendor-supported appliance. It does not host Red, execute target tools, or make assessments offline. See [architecture and data boundaries](docs/architecture.md) for the request and response flow.
 
 ## Get started
 
 [Follow the laptop quickstart](docs/getting-started.md) to run the synthetic demo, connect to local Ollama, configure a Red target, and inspect a report. For network and production deployment patterns, see [deployment](docs/deployment.md).
+
+Browse the [configuration examples](examples/README.md) for profile, ground truth, direct and indirect scans, target adapters, and local demos.
 
 ## Documentation
 

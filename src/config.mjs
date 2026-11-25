@@ -11,6 +11,14 @@ function integer(n, min, max, label) {
 function string(s, label, max = 256) {
   if (typeof s !== 'string' || !s.length || s.length > max || /[\x00-\x1f]/.test(s)) throw Error(`${label}: invalid string`);
 }
+function validateAppContext(value, label = 'appContext') {
+  object(value, ['appDescription','allowedActions','forbiddenActions'], label);
+  string(value.appDescription,`${label}.appDescription`,10000);
+  for (const field of ['allowedActions','forbiddenActions']) {
+    if (!Array.isArray(value[field]) || value[field].length > 100) throw Error(`${label}.${field}: expected an array of up to 100 strings`);
+    for (const item of value[field]) string(item,`${label}.${field}`,1500);
+  }
+}
 export function validate(c) {
   object(c, ['mode','target','red','execution','output','gate'], 'config');
   if (!['mock','red'].includes(c.mode)) throw Error('mode must be mock or red');
@@ -47,7 +55,7 @@ export function validate(c) {
   object(c.gate, ['maxSuccessfulAttacks'], 'gate');
   c.gate.maxSuccessfulAttacks ??= 0; integer(c.gate.maxSuccessfulAttacks,0,100000,'gate');
   if (c.mode === 'red') {
-    object(c.red, ['targetId','targetName','targetProfile','groundTruth','recon','objectives','customObjectives','strategy','baseUrl'], 'red');
+    object(c.red, ['targetId','targetName','targetProfile','targetOptions','groundTruth','recon','objectives','customObjectives','strategy','datasetId','language','scanName','baseUrl'], 'red');
     if (['targetId','targetName','targetProfile'].filter(k => c.red[k] !== undefined).length !== 1) throw Error('provide exactly one of targetId, targetName or targetProfile');
     c.red.recon ??= {};
     object(c.red.recon, ['refresh','timeoutSeconds','maxSessions','maxTurns'], 'recon');
@@ -63,16 +71,28 @@ export function validate(c) {
       if (!c.red.targetName.trim()) throw Error('target name must not be blank');
     } else {
       const p = c.red.targetProfile;
-      object(p, ['name','appContext','responseTimeoutSeconds'], 'targetProfile');
+      object(p, ['name','appContext','appContextFile','responseTimeoutSeconds','singleTurn'], 'targetProfile');
       string(p.name,'targetProfile.name',200);
       if (!p.name.trim()) throw Error('target name must not be blank');
-      object(p.appContext, ['appDescription','allowedActions','forbiddenActions'], 'appContext');
-      string(p.appContext.appDescription,'appDescription',10000);
-      for (const field of ['allowedActions','forbiddenActions']) {
-        if (!Array.isArray(p.appContext[field]) || p.appContext[field].length > 100) throw Error('profile actions must be arrays with at most 100 entries');
-        for (const action of p.appContext[field]) string(action,field,1500);
-      }
+      if ((p.appContext === undefined) === (p.appContextFile === undefined)) throw Error('targetProfile requires exactly one of appContext or appContextFile');
+      if (p.appContext !== undefined) validateAppContext(p.appContext);
+      if (p.appContextFile !== undefined) string(p.appContextFile,'targetProfile.appContextFile',2048);
       if (p.responseTimeoutSeconds !== undefined) integer(p.responseTimeoutSeconds,1,480,'responseTimeoutSeconds');
+      if (p.singleTurn !== undefined && typeof p.singleTurn !== 'boolean') throw Error('targetProfile.singleTurn must be a boolean');
+    }
+    if (c.red.targetOptions !== undefined) {
+      const options = c.red.targetOptions;
+      object(options, ['name','appContext','appContextFile','responseTimeoutSeconds','singleTurn'], 'targetOptions');
+      if (!Object.keys(options).length) throw Error('targetOptions must contain at least one setting');
+      if (c.red.targetProfile !== undefined) throw Error('use targetProfile fields instead of targetOptions when creating a supplied profile');
+      if (c.red.targetName !== undefined && options.name !== undefined) throw Error('targetOptions.name cannot be used with targetName');
+      if (c.red.targetId !== undefined && options.appContextFile !== undefined) throw Error('targetOptions.appContextFile is only supported when creating or reusing by name');
+      if ((options.appContext === undefined) !== (options.appContextFile === undefined)) {
+        if (options.appContext !== undefined) validateAppContext(options.appContext,'targetOptions.appContext');
+      } else if (options.appContext !== undefined) throw Error('targetOptions accepts only one of appContext or appContextFile');
+      if (options.appContextFile !== undefined) string(options.appContextFile,'targetOptions.appContextFile',2048);
+      if (options.responseTimeoutSeconds !== undefined) integer(options.responseTimeoutSeconds,1,480,'targetOptions.responseTimeoutSeconds');
+      if (options.singleTurn !== undefined && typeof options.singleTurn !== 'boolean') throw Error('targetOptions.singleTurn must be a boolean');
     }
     if (c.red.groundTruth !== undefined) {
       const groundTruth = c.red.groundTruth;
@@ -87,18 +107,35 @@ export function validate(c) {
         if (typeof groundTruth.tools !== 'string' || !groundTruth.tools.trim() || groundTruth.tools.length > 100000 || /\x00/.test(groundTruth.tools)) throw Error('groundTruth.tools: invalid string');
       }
     }
+    if (c.red.scanName !== undefined) {
+      string(c.red.scanName,'scanName',200);
+      if (!c.red.scanName.trim()) throw Error('scanName must not be blank');
+    }
+    const languages = ['ar','bn','zh-Hans','zh-Hant','cs','da','nl','en','fi','fr','de','el','he','hi','hu','id','it','ja','ko','ms','no','pl','pt','ro','ru','es','sv','th','tr','uk','vi'];
+    if (c.red.language !== undefined && !languages.includes(c.red.language)) throw Error('unsupported Red language');
     c.red.baseUrl ??= 'https://red-webhooks.lakera.ai';
     if (c.red.baseUrl !== 'https://red-webhooks.lakera.ai') throw Error('this prototype supports only the documented SDK US endpoint');
-    if (c.red.objectives === undefined || c.red.objectives === 'all') c.red.objectives = [...DEFAULT_OBJECTIVES];
-    if (!Array.isArray(c.red.objectives) || c.red.objectives.length > 100 || c.red.objectives.some(x => typeof x !== 'string' || !/^[\w.:-]{1,128}$/.test(x))) throw Error('objectives must be all or an array of IDs');
-    if (new Set(c.red.objectives).size !== c.red.objectives.length) throw Error('duplicate objective IDs');
-    object(c.red.strategy, ['name','numberOfProbes','maxTurns','maxRetries','earlyStopScore','numberOfAttacksPerObjective'], 'strategy');
-    const allowed = {static:['numberOfProbes'],crescendo:['maxTurns','maxRetries','earlyStopScore'],'tool-response-poisoning':['numberOfAttacksPerObjective']};
-    if (typeof c.red.strategy.name !== 'string' || !Object.hasOwn(allowed,c.red.strategy.name) || Object.keys(c.red.strategy).some(k => k !== 'name' && !allowed[c.red.strategy.name].includes(k))) throw Error('invalid strategy fields');
-    c.red.customObjectives ??= [];
-    if (!Array.isArray(c.red.customObjectives) || c.red.customObjectives.length > 100) throw Error('invalid customObjectives');
-    const keys = new Set([...DEFAULT_OBJECTIVES, ...c.red.objectives]);
-    for (const o of c.red.customObjectives) {
+    if (c.red.datasetId !== undefined) {
+      string(c.red.datasetId,'datasetId',256);
+      if (['objectives','customObjectives','strategy','language'].some(k => c.red[k] !== undefined)) throw Error('dataset scans cannot include objectives, customObjectives, strategy or language');
+    } else {
+      c.red.strategy ??= {name:'crescendo'};
+      object(c.red.strategy, ['name','numberOfProbes','maxTurns','maxRetries','earlyStopScore','numberOfAttacksPerObjective','probes'], 'strategy');
+      const allowed = {static:['numberOfProbes','numberOfAttacksPerObjective'],crescendo:['maxTurns','maxRetries','earlyStopScore','numberOfAttacksPerObjective'],smoke:['probes'],'tool-response-poisoning':['numberOfAttacksPerObjective']};
+      if (typeof c.red.strategy.name !== 'string' || !Object.hasOwn(allowed,c.red.strategy.name) || Object.keys(c.red.strategy).some(k => k !== 'name' && !allowed[c.red.strategy.name].includes(k))) throw Error('invalid strategy fields');
+      if (c.red.strategy.name === 'smoke') {
+        if (c.red.objectives !== undefined || c.red.customObjectives !== undefined) throw Error('smoke strategy does not accept objectives or customObjectives');
+        if (c.red.strategy.probes !== undefined && (!Array.isArray(c.red.strategy.probes) || !c.red.strategy.probes.length || c.red.strategy.probes.some(p => typeof p !== 'string' || !p.trim() || p.length > 10000))) throw Error('strategy.probes must be a non-empty array of prompt strings');
+      } else {
+        if (c.red.objectives === undefined || c.red.objectives === 'all') c.red.objectives = [...DEFAULT_OBJECTIVES];
+        if (!Array.isArray(c.red.objectives) || c.red.objectives.length > 100 || c.red.objectives.some(x => typeof x !== 'string' || !/^[\w.:-]{1,128}$/.test(x))) throw Error('objectives must be all or an array of IDs');
+        if (new Set(c.red.objectives).size !== c.red.objectives.length) throw Error('duplicate objective IDs');
+        c.red.customObjectives ??= [];
+        if (!Array.isArray(c.red.customObjectives) || c.red.customObjectives.length > 100) throw Error('invalid customObjectives');
+      }
+      const objectiveIds = c.red.objectives ?? [];
+      const keys = new Set([...DEFAULT_OBJECTIVES, ...objectiveIds]);
+      for (const o of c.red.customObjectives ?? []) {
       object(o, ['key','name','attackDescription','successIndicators','severity','additionalContext','runsWithDirectAttacks','runsWithIndirectAttacks'], 'customObjective');
       if (typeof o.key !== 'string' || !/^[A-Za-z0-9._:-]{1,128}$/.test(o.key) || keys.has(o.key)) throw Error('invalid or duplicate custom objective key');
       keys.add(o.key);
@@ -110,15 +147,20 @@ export function validate(c) {
       if (o.additionalContext !== undefined) string(o.additionalContext,'additionalContext',1500);
       if (o.severity !== undefined && !['critical','high','medium','low'].includes(o.severity)) throw Error('invalid severity');
       for (const flag of ['runsWithDirectAttacks','runsWithIndirectAttacks']) if (o[flag] !== undefined && typeof o[flag] !== 'boolean') throw Error('invalid objective strategy flag');
-      const flag = c.red.strategy.name === 'tool-response-poisoning' ? 'runsWithIndirectAttacks' : 'runsWithDirectAttacks';
-      if (o[flag] === false) throw Error('custom objective excludes selected strategy');
+        const flag = c.red.strategy.name === 'tool-response-poisoning' ? 'runsWithIndirectAttacks' : 'runsWithDirectAttacks';
+        if (o[flag] === false) throw Error('custom objective excludes selected strategy');
+      }
+      if (!objectiveIds.length && !(c.red.customObjectives ?? []).length && c.red.strategy.name !== 'smoke') throw Error('at least one objective required');
+      if (c.red.strategy.name === 'tool-response-poisoning' && objectiveIds.some(id => DEFAULT_OBJECTIVES.includes(id))) throw Error('default catalog supports direct strategies only; select indirect objectives explicitly');
+      if (c.target.adapter === 'json' && !['static','smoke'].includes(c.red.strategy.name)) throw Error('stateless JSON adapter supports only static or smoke scans');
+      const ranges = {numberOfProbes:[1,50],maxTurns:[1,30],maxRetries:[0,10],earlyStopScore:[3,5]};
+      for (const k of ['numberOfProbes','maxTurns','maxRetries','earlyStopScore']) if (c.red.strategy[k] !== undefined) integer(c.red.strategy[k],...ranges[k],k);
+      if (c.red.strategy.numberOfAttacksPerObjective !== undefined) {
+        const range = c.red.strategy.name === 'crescendo' ? [1,10] : c.red.strategy.name === 'static' ? [1,50] : [1,100];
+        integer(c.red.strategy.numberOfAttacksPerObjective,...range,'numberOfAttacksPerObjective');
+      }
+      if (c.red.strategy.name === 'tool-response-poisoning' && (c.target.adapter !== 'stateful' || c.target.instrumented !== true)) throw Error('indirect attacks require an explicitly instrumented stateful target');
     }
-    if (!c.red.objectives.length && !c.red.customObjectives.length) throw Error('at least one objective required');
-    if (c.red.strategy.name === 'tool-response-poisoning' && c.red.objectives.some(id => DEFAULT_OBJECTIVES.includes(id))) throw Error('default catalog supports direct strategies only; select indirect objectives explicitly');
-    if (c.target.adapter === 'json' && c.red.strategy.name !== 'static') throw Error('stateless JSON adapter supports static scans only');
-    const ranges = {numberOfProbes:[1,50],maxTurns:[1,30],maxRetries:[0,10],earlyStopScore:[3,5],numberOfAttacksPerObjective:[1,100]};
-    for (const k of allowed[c.red.strategy.name]) if (c.red.strategy[k] !== undefined) integer(c.red.strategy[k],...ranges[k],k);
-    if (c.red.strategy.name === 'tool-response-poisoning' && (c.target.adapter !== 'stateful' || c.target.instrumented !== true)) throw Error('indirect attacks require an explicitly instrumented stateful target');
   } else if (c.red !== undefined) throw Error('mock mode cannot contain Red configuration');
   return c;
 }

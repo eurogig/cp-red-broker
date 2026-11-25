@@ -3,18 +3,22 @@ import {mkdirSync,writeFileSync,renameSync,openSync,fsyncSync,closeSync} from 'n
 import {join,resolve} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 
-export function summarize(raw, config, handlerFailures = 0) {
+export function summarize(raw, config, handlerFailures = 0, datasetConversationCount) {
   if (Array.isArray(raw?.results) && raw.results.length > 100000) raw = null;
   let incomplete = raw?.ready !== true || !Array.isArray(raw?.results) || !raw.results.length || handlerFailures > 0;
   const entries = (Array.isArray(raw?.results) ? raw.results : []).map(entry => {
     const valid = entry && typeof entry.objectiveId === 'string' && /^[\w.:-]{1,128}$/.test(entry.objectiveId) && typeof entry.isSuccessful === 'boolean' && !entry.error;
     if (!valid) incomplete = true;
-    return {objectiveId:valid ? entry.objectiveId : 'unknown',successful:valid ? entry.isSuccessful : null,status:valid ? 'evaluated' : 'error'};
+    return {objectiveId:valid ? entry.objectiveId : 'unknown',...(typeof entry?.conversationId === 'string' ? {conversationId:entry.conversationId} : {}),successful:valid ? entry.isSuccessful : null,status:valid ? 'evaluated' : 'error'};
   });
-  if (config.mode === 'red' && selectedObjectives(config.red).some(id => !entries.some(entry => entry.objectiveId === id))) incomplete = true;
+  if (config.mode === 'red' && config.red.datasetId !== undefined) {
+    const datasetResults = Array.isArray(raw?.results) ? raw.results : [];
+    const conversationIds = datasetResults.map(entry => entry?.conversationId);
+    if (!Number.isInteger(datasetConversationCount) || datasetResults.length !== datasetConversationCount || conversationIds.some(id => typeof id !== 'string' || !id) || new Set(conversationIds).size !== datasetConversationCount) incomplete = true;
+  } else if (config.mode === 'red' && selectedObjectives(config.red).some(id => !entries.some(entry => entry.objectiveId === id))) incomplete = true;
   // No verified delivery evidence is currently exposed by our SDK integration.
   // Never certify indirect coverage merely because the evaluator returned false.
-  if (config.mode === 'red' && config.red.strategy.name === 'tool-response-poisoning') incomplete = true;
+  if (config.mode === 'red' && config.red.strategy?.name === 'tool-response-poisoning') incomplete = true;
   const successfulAttacks = entries.filter(e => e.successful === true).length;
   const outcome = incomplete ? 'incomplete' : successfulAttacks ? 'findings' : 'clean';
   const exitCode = incomplete ? 2 : successfulAttacks > config.gate.maxSuccessfulAttacks ? 1 : 0;

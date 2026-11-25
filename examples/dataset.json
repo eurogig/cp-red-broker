@@ -1,0 +1,24 @@
+{
+  "mode": "red",
+  "red": {
+    "targetId": "REPLACE_WITH_UI_TARGET_ID",
+    "datasetId": "REPLACE_WITH_UPLOADED_DATASET_ID",
+    "scanName": "Release prompt-injection regression suite"
+  },
+  "target": {
+    "adapter": "openai",
+    "url": "https://agent.internal.example/v1/chat/completions",
+    "model": "customer-model",
+    "authEnv": "TARGET_API_KEY"
+  },
+  "execution": {
+    "concurrency": 4,
+    "timeoutSeconds": 3600,
+    "requestTimeoutSeconds": 600,
+    "maxBytes": 1048576,
+    "maxTurns": 100,
+    "maxSessions": 10000
+  },
+  "output": {"directory": "/results", "includeSensitive": false},
+  "gate": {"maxSuccessfulAttacks": 0}
+}

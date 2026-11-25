@@ -3,7 +3,9 @@
   "red": {
     "targetId": "REPLACE_WITH_UI_TARGET_ID",
     "objectives": ["security.system-prompt-extraction.1"],
-    "strategy": {"name": "crescendo", "maxTurns": 5, "maxRetries": 0}
+    "strategy": {"name": "crescendo", "numberOfAttacksPerObjective": 2, "maxTurns": 5, "maxRetries": 0, "earlyStopScore": 4},
+    "language": "en",
+    "scanName": "Pre-release adaptive assessment"
   },
   "target": {
     "adapter": "openai",

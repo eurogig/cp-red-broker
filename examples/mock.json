@@ -1,6 +1,6 @@
 {
   "mode": "mock",
-  "target": {"adapter": "demo", "url": "http://localhost/demo", "allowHttp": true},
+  "target": {"adapter": "demo", "url": "http://localhost/demo", "allowHttp": true, "demoSafe": true},
   "execution": {"concurrency": 4, "timeoutSeconds": 60},
   "output": {"directory": "./results", "includeSensitive": false},
   "gate": {"maxSuccessfulAttacks": 0}

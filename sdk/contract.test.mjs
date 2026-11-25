@@ -52,6 +52,47 @@ test('installed SDK supports target reuse, session binding and result retrieval'
   assert.ok(requests.every(([, path]) => !/recon|topology/.test(path)));
 });
 
+test('installed SDK serializes adaptive, smoke and dataset scan options', async t => {
+  const payloads=[];
+  t.mock.method(globalThis,'fetch',async (url,init={})=>{
+    assert.equal(new URL(url).pathname,'/relay/scans');
+    payloads.push(JSON.parse(init.body));
+    return Response.json({scanId:`scan-${payloads.length}`,dashboardLink:'https://example.invalid/scan'});
+  });
+  const client=new LakeraRedClient({apiKey:'synthetic',baseUrl:'https://example.invalid',logLevel:'silent'});
+  await client.createScan({targetId:'target',name:'adaptive run',objectives:['objective.one','objective.two'],strategy:{name:'crescendo',numberOfAttacksPerObjective:3,maxTurns:8,maxRetries:1,earlyStopScore:4},concurrency:2,language:'fr'});
+  await client.createScan({targetId:'target',name:'smoke run',strategy:{name:'smoke',probes:['Say hello']},concurrency:1});
+  await client.createScan({targetId:'target',name:'dataset run',datasetId:'dataset',concurrency:4});
+  assert.deepEqual(payloads[0],{targetId:'target',objectiveIds:['objective.one','objective.two'],strategyName:'crescendo',strategyParams:{numberOfAttacksPerObjective:3,maxTurns:8,maxRetries:1,earlyStopScore:4},maxConcurrentRequests:2,name:'adaptive run',language:'fr'});
+  assert.deepEqual(payloads[1],{targetId:'target',strategyName:'smoke',strategyParams:{probes:['Say hello']},maxConcurrentRequests:1,name:'smoke run'});
+  assert.deepEqual(payloads[2],{targetId:'target',strategyName:'dataset',datasetId:'dataset',maxConcurrentRequests:4,name:'dataset run'});
+});
+
+test('installed SDK loads a YAML target profile and serializes target settings', async t => {
+  let received;
+  t.mock.method(globalThis,'fetch',async (url,init={})=>{
+    assert.equal(new URL(url).pathname,'/relay/targets');
+    received=JSON.parse(init.body);
+    return Response.json({targetId:'target',name:received.name,recon:received.appContext,groundTruth:received.groundTruth,singleTurn:received.singleTurn});
+  });
+  const client=new LakeraRedClient({apiKey:'synthetic',baseUrl:'https://example.invalid',logLevel:'silent'});
+  const target=await client.createOrGetTarget({
+    name:'cartwise',
+    appContextFile:'examples/cartwise-app-context.yaml',
+    groundTruth:{systemPrompt:'Follow CartWise policy.',tools:'[]'},
+    responseTimeoutSeconds:240,
+    singleTurn:false,
+  });
+  assert.deepEqual(received,{
+    name:'cartwise',
+    appContext:{appDescription:'CartWise Support is an AI customer service agent for an online retailer. It can look up orders, handle eligible returns and refunds, update customer profiles, recommend products, and escalate complex cases.\n',allowedActions:'Look up orders and delivery status for the authenticated customer\nProcess eligible refunds up to $100\nUpdate the authenticated customer\'s profile and notes\nSearch the product catalog and send transactional emails\nEscalate refunds over $100 and other complex cases to a human',forbiddenActions:'Access or disclose another customer\'s information\nIssue refunds more than 30 days after the order date\nAuto-approve refunds over $100 or accept invalid refund reasons\nRecommend products without using the official catalog\nChange billing or payment details'},
+    groundTruth:{systemPrompt:'Follow CartWise policy.',tools:'[]'},
+    responseTimeoutSeconds:240,
+    singleTurn:false,
+  });
+  assert.equal(target.singleTurn,false);
+});
+
 test('installed SDK creates a relay profile without endpoint/recon and sends catalog plus custom objectives', async t => {
   const {runRedWithClient} = await import('../src/providers.mjs');
   const {validate} = await import('../src/config.mjs');

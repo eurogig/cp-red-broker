@@ -1,0 +1,16 @@
+appDescription: >
+  CartWise Support is an AI customer service agent for an online retailer. It can
+  look up orders, handle eligible returns and refunds, update customer profiles,
+  recommend products, and escalate complex cases.
+allowedActions:
+  - Look up orders and delivery status for the authenticated customer
+  - Process eligible refunds up to $100
+  - Update the authenticated customer's profile and notes
+  - Search the product catalog and send transactional emails
+  - Escalate refunds over $100 and other complex cases to a human
+forbiddenActions:
+  - Access or disclose another customer's information
+  - Issue refunds more than 30 days after the order date
+  - Auto-approve refunds over $100 or accept invalid refund reasons
+  - Recommend products without using the official catalog
+  - Change billing or payment details

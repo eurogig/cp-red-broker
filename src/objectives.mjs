@@ -27,5 +27,6 @@ export const DEFAULT_OBJECTIVES = Object.freeze([
 ]);
 
 export function selectedObjectives(red) {
+  if (red.datasetId !== undefined || red.strategy?.name === 'smoke') return [];
   return [...red.objectives, ...(red.customObjectives ?? []).map(o => o.key)];
 }

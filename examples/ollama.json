@@ -20,7 +20,7 @@
     ],
     "strategy": {
       "name": "static",
-      "numberOfProbes": 1
+      "numberOfAttacksPerObjective": 1
     }
   },
   "target": {

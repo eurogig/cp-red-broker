@@ -30,11 +30,32 @@ test('invalid, ambiguous or strategy-incompatible objectives fail before cloud c
     {strategy:{name:'tool-response-poisoning'}},
   ]) assert.throws(()=>validate(config(red)));
 });
+test('SDK scan options cover attack counts, language, smoke and datasets',()=>{
+  const adaptive=validate(config({strategy:{name:'crescendo',numberOfAttacksPerObjective:3,maxTurns:8},language:'fr',scanName:'French adaptive scan'}));
+  assert.equal(adaptive.red.strategy.numberOfAttacksPerObjective,3);
+  assert.equal(adaptive.red.language,'fr');
+  assert.equal(adaptive.red.scanName,'French adaptive scan');
+  const smoke=validate(config({strategy:{name:'smoke',probes:['Say hello']}}));
+  assert.deepEqual(selectedObjectives(smoke.red),[]);
+  const dataset=validate(config({datasetId:'dataset-123',strategy:undefined,objectives:undefined,customObjectives:undefined}));
+  assert.equal(dataset.red.datasetId,'dataset-123');
+  assert.deepEqual(selectedObjectives(dataset.red),[]);
+  for (const red of [
+    {datasetId:'dataset-123',strategy:{name:'static'}},
+    {datasetId:'dataset-123',language:'fr'},
+    {strategy:{name:'smoke'},objectives:[]},
+    {strategy:{name:'crescendo',numberOfAttacksPerObjective:11}},
+    {strategy:{name:'static',numberOfAttacksPerObjective:51}},
+  ]) assert.throws(()=>validate(config({...red,strategy:red.strategy ?? undefined,objectives:red.objectives,customObjectives:red.customObjectives})));
+});
 test('supplied profiles required for creation, never combined with an ID',()=>{
   assert.throws(()=>validate(config({targetProfile:profile()})));
   assert.throws(()=>validate(config({targetId:undefined,targetProfile:{name:'local'}})));
   assert.throws(()=>validate(config({targetId:undefined,targetProfile:{...profile(),handler:true}})));
   assert.ok(validate(config({targetId:undefined,targetProfile:profile()})).red.targetProfile);
+  assert.ok(validate(config({targetId:undefined,targetProfile:{name:'local',appContextFile:'/app/profile.yaml',singleTurn:true}})).red.targetProfile);
+  assert.ok(validate(config({targetOptions:{name:'renamed',responseTimeoutSeconds:240,singleTurn:false,appContext:{appDescription:'Agent',allowedActions:['Read'],forbiddenActions:['Write']}}})).red.targetOptions);
+  assert.throws(()=>validate(config({targetOptions:{appContextFile:'/app/profile.yaml'}})));
 });
 test('missing catalog or custom results fail closed',()=>{
   const c=validate(config({customObjectives:[custom()]}));
@@ -59,5 +80,24 @@ test('provider creates from supplied profile without handler and forwards full s
   };
   await runRedWithClient(client,c,()=>{},new AbortController().signal,{runId:'run',send:x=>progress.push(x)});
   assert.ok(ran);
-  assert.deepEqual(progress,[{targetId:'created'},{scanId:'scan'}]);
+  assert.deepEqual(progress,[{stage:'target_profile_create'},{targetId:'created'},{stage:'recon_complete'},{stage:'scan_create'},{scanId:'scan',stage:'assessment'}]);
+});
+test('provider preflights an existing dataset and creates a dataset scan',async()=>{
+  const c=validate(config({datasetId:'dataset-123',strategy:undefined,objectives:undefined,customObjectives:undefined,scanName:'Regression suite'}));
+  const progress=[];
+  const raw={ready:true,results:[
+    {objectiveId:'dataset-123',conversationId:'c1',isSuccessful:false},
+    {objectiveId:'dataset-123',conversationId:'c2',isSuccessful:true},
+  ]};
+  const client={
+    async getTarget(){return {targetId:'target',hasRecon:true};},
+    async getDataset(id){assert.equal(id,'dataset-123');return {conversationCount:2};},
+    async createScan(options){assert.deepEqual(options,{targetId:'target',name:'Regression suite',concurrency:4,datasetId:'dataset-123'});return {scanId:'scan',async run(){},async getResults(){return raw;}};},
+  };
+  const result=await runRedWithClient(client,c,()=>{},new AbortController().signal,{runId:'run',send:x=>progress.push(x)});
+  assert.equal(result,raw);
+  assert.ok(progress.some(x=>x.datasetConversationCount===2));
+  assert.equal(summarize(raw,c,0,2).exitCode,1);
+  assert.equal(summarize({...raw,results:raw.results.slice(1)},c,0,2).exitCode,2);
+  assert.equal(summarize({...raw,results:[raw.results[0],raw.results[0]]},c,0,2).exitCode,2);
 });

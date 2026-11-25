@@ -18,10 +18,10 @@ try {
   const abort = new AbortController();
   const terminate = () => abort.abort();
   process.once('SIGTERM',terminate); process.once('SIGINT',terminate);
-  const {raw,handlerFailures,sessions,scanId,targetId,reconSessions,failureCode,diagnostic,stage} = await supervise(config,runId,abort.signal);
+  const {raw,handlerFailures,sessions,scanId,targetId,reconSessions,datasetConversationCount,failureCode,diagnostic,stage} = await supervise(config,runId,abort.signal);
   process.removeListener('SIGTERM',terminate); process.removeListener('SIGINT',terminate);
-  const result = summarize(raw,config,handlerFailures);
-  const summary = {schemaVersion:1,runId,provider:config.mode,startedAt,finishedAt:new Date().toISOString(),scanId,targetId,reconSessions,stage,diagnostic,selectedObjectives:config.mode === 'red' ? selectedObjectives(config.red) : undefined,sessions,failureCode,gate:config.gate,...result};
+  const result = summarize(raw,config,handlerFailures,datasetConversationCount);
+  const summary = {schemaVersion:1,runId,provider:config.mode,startedAt,finishedAt:new Date().toISOString(),scanId,targetId,reconSessions,datasetConversationCount,stage,diagnostic,selectedObjectives:config.mode === 'red' ? selectedObjectives(config.red) : undefined,sessions,failureCode,gate:config.gate,...result};
   publish(directory,summary,raw,config.output.includeSensitive);
   console.log(JSON.stringify({runId,directory,outcome:summary.outcome,exitCode:summary.exitCode}));
   process.exitCode = summary.exitCode;

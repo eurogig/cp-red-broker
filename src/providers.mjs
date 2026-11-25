@@ -36,7 +36,7 @@ export async function runRedWithClient(client, config, handler, signal, progress
     if (config.red.targetName !== undefined) {
       stage = 'target_create_or_recon'; progress.send({stage});
       if (!lifecycle.reconHandler) throw Error('recon handler required');
-      target = await client.createOrGetTarget({name:config.red.targetName,...(config.red.groundTruth ? {groundTruth:config.red.groundTruth} : {})}, lifecycle.reconHandler);
+      target = await client.createOrGetTarget({name:config.red.targetName,...(config.red.targetOptions ?? {}),...(config.red.groundTruth ? {groundTruth:config.red.groundTruth} : {})}, lifecycle.reconHandler);
       progress.send({targetId:target.targetId});
       requireReconProfile(target.recon);
     } else if (config.red.targetProfile) {
@@ -46,7 +46,8 @@ export async function runRedWithClient(client, config, handler, signal, progress
     } else {
       progress.send({stage});
       target = await client.getTarget(config.red.targetId);
-      if (config.red.groundTruth) target = await client.updateTarget(target.targetId,{groundTruth:config.red.groundTruth});
+      const targetUpdate = {...(config.red.targetOptions ?? {}),...(config.red.groundTruth ? {groundTruth:config.red.groundTruth} : {})};
+      if (Object.keys(targetUpdate).length) target = await client.updateTarget(target.targetId,targetUpdate);
       progress.send({targetId:target.targetId});
       if (config.red.recon?.refresh) {
         if (!lifecycle.reconHandler) throw Error('recon handler required');
@@ -69,7 +70,23 @@ export async function runRedWithClient(client, config, handler, signal, progress
   // Start a fresh assessment budget only after target setup/recon has finished.
   signal = lifecycle.startAssessment?.() ?? signal;
   progress.send({stage:'scan_create'});
-  const scan = await client.createScan({targetId:target.targetId,name:`Customer runner ${progress.runId}`,objectives:config.red.objectives,customObjectives:config.red.customObjectives,strategy:config.red.strategy,concurrency:config.execution.concurrency});
+  const scanName = config.red.scanName ?? `Customer runner ${progress.runId}`;
+  const scanOptions = {targetId:target.targetId,name:scanName,concurrency:config.execution.concurrency};
+  if (config.red.datasetId !== undefined) {
+    progress.send({stage:'dataset_lookup'});
+    const dataset = await client.getDataset(config.red.datasetId);
+    if (!Number.isInteger(dataset.conversationCount) || dataset.conversationCount < 1) throw Error('dataset has no conversations');
+    progress.send({datasetConversationCount:dataset.conversationCount});
+    scanOptions.datasetId = config.red.datasetId;
+  } else {
+    if (config.red.strategy.name !== 'smoke') {
+      scanOptions.objectives = config.red.objectives;
+      scanOptions.customObjectives = config.red.customObjectives;
+    }
+    scanOptions.strategy = config.red.strategy;
+    if (config.red.language !== undefined) scanOptions.language = config.red.language;
+  }
+  const scan = await client.createScan(scanOptions);
   progress.send({scanId:scan.scanId,stage:'assessment'});
   await scan.run(handler);
   while (!signal.aborted) {
