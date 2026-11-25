@@ -29,6 +29,7 @@ export function createSessionHandler(config, getSignal, requestOverride, onTrace
         onTrace({event:'response_submitted',sessionId});
         step = 'receive_prompt';
       }
+      onTrace({event:'session_complete',sessionId});
     } catch (error) {
       stats.failures++;
       onTrace({event:'handler_error', attempt, sessionId:conversation?.sessionId, step,

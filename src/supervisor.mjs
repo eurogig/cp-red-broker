@@ -1,5 +1,6 @@
 import {fork} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {VerboseDashboard} from './verbose-dashboard.mjs';
 
 export async function supervise(config,runId,signal,workerUrl=new URL('./worker.mjs',import.meta.url)) {
   const worker=fork(fileURLToPath(workerUrl),[runId],{stdio:['ignore','ignore','ignore','ipc'],execArgv:[...process.execArgv,'--max-old-space-size=384']});
@@ -9,12 +10,17 @@ export async function supervise(config,runId,signal,workerUrl=new URL('./worker.
   signal?.addEventListener('abort',terminate,{once:true});
   if(signal?.aborted) terminate();
   const verbose = process.env.RED_VERBOSE === '1';
+  const dashboard = verbose && process.stdout.isTTY ? new VerboseDashboard() : undefined;
   worker.on('message',message=>{
     if(message.type==='trace' && verbose) {
       const {type,...data}=message;
-      console.log(JSON.stringify({runId,...data}));
+      if (dashboard) dashboard.trace(data);
+      else console.log(JSON.stringify({runId,...data}));
     }
-    if(message.type==='progress' && typeof message.metadata?.stage==='string' && /^[a-z_]{1,64}$/.test(message.metadata.stage)) { stage=message.metadata.stage; console.log(JSON.stringify({runId,stage})); }
+    if(message.type==='progress') {
+      if (dashboard) dashboard.progress(message.metadata);
+      if(typeof message.metadata?.stage==='string' && /^[a-z_]{1,64}$/.test(message.metadata.stage)) { stage=message.metadata.stage; if(!dashboard) console.log(JSON.stringify({runId,stage})); }
+    }
     if(message.type==='progress' && message.metadata?.failure && /^[A-Z_]{1,64}$/.test(message.metadata.failure.category) && /^[a-z_]{1,64}$/.test(message.metadata.failure.stage)) diagnostic=message.metadata.failure;
     if(message.type==='progress' && message.metadata?.phase==='assessment' && config.mode==='red' && !assessmentStarted && !forced) {
       assessmentStarted=true;
@@ -33,5 +39,5 @@ export async function supervise(config,runId,signal,workerUrl=new URL('./worker.
   clearTimeout(timer);signal?.removeEventListener('abort',terminate);
   if (handlerFailures) failureCode='TARGET_FAILURE';
   if ((!received || code!==0) && !failureCode) failureCode='WORKER_FAILED';
-  return {raw:received&&!forced&&code===0?raw:null,handlerFailures,sessions,scanId,targetId,reconSessions,datasetConversationCount,failureCode,diagnostic,stage};
+  return {raw:received&&!forced&&code===0?raw:null,handlerFailures,sessions,scanId,targetId,reconSessions,datasetConversationCount,failureCode,diagnostic,stage,dashboard};
 }

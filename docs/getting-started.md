@@ -215,13 +215,13 @@ docker run --rm --init --read-only --user 10001:10001 \
   checkpoint-red-runner:0.1.0
 ```
 
-**Optional verbose logs.** If your image predates this feature, rebuild it once using the build command in step 2. To enable tracing for a run, replace the `-e LAKERA_RED_API_KEY` line above with:
+**Optional live scan view.** To show prompts and replies in an adaptive two-column terminal dashboard, replace the `-e LAKERA_RED_API_KEY` line above with:
 
 ```sh
-  -e LAKERA_RED_API_KEY -e RED_VERBOSE=1 \
+  -it -e LAKERA_RED_API_KEY -e RED_VERBOSE=1 \
 ```
 
-The switch belongs on `docker run`, before the image name. Omit `-e RED_VERBOSE=1` on the next run to return to normal logging. Verbose output includes full prompts and replies in Docker logs. See [verbose session logging](deployment.md#verbose-session-logging) for the event meanings.
+The options belong on `docker run`, before the image name. The dashboard resizes with the terminal and keeps a bounded live view without transcript scrollback. Without a TTY, verbose mode writes JSON trace lines for log collection. Omit `-e RED_VERBOSE=1` on the next run to return to normal output. Prompts and replies may contain sensitive content. See [verbose scan dashboard](deployment.md#verbose-scan-dashboard) for details.
 
 No custom Docker network or published runner port is needed. The memory/CPU limits above apply to the runner, not Ollama on the host. Red may impose its own reply deadline; increasing the local timeout cannot extend that deadline. If the model is too slow, warm it up first and inspect the incomplete-run outcome before increasing the workload.
 

@@ -93,11 +93,20 @@ docker run --rm --init --read-only --user 10001:10001 \
 
 Use the application's container port, not a host-published port. Its server must listen on a container-reachable interface, usually `0.0.0.0`. No host port publication is needed for this connection. `red-test` is an ordinary user-defined bridge with outbound connectivity; its name does not enforce an egress allowlist. Do not add `--internal` to this single-network live example: the runner also needs outbound access to Red. The bundled Compose demo uses an internal network because it does not contact Red.
 
-### Verbose session logging
+### Verbose scan dashboard
 
-Set `-e RED_VERBOSE=1` on `docker run` before the image name, alongside `-e LAKERA_RED_API_KEY`. For a Kubernetes Job, set the runner container's `RED_VERBOSE` environment variable to the string `"1"`. An image containing the feature supports both log levels. Omit the variable or set it to `0` to disable session traces for a run.
+Set `-e RED_VERBOSE=1` and allocate a TTY with `-it` on `docker run` before the image name, alongside `-e LAKERA_RED_API_KEY`:
 
-The worker’s session handler emits trace events for recon and assessment. When `RED_VERBOSE` equals `1`, the supervisor writes each event as a JSON line to stdout with the run ID and phase. In an attached Docker run these lines appear in the terminal. The quickstart uses `--rm`, so capture stdout during the run if you need the logs afterward. Full prompts and replies can contain sensitive content.
+```sh
+docker run --rm -it -e LAKERA_RED_API_KEY -e RED_VERBOSE=1 \
+  --mount "type=bind,src=$PWD/runner.json,dst=/config/runner.json,readonly" \
+  --mount "type=bind,src=$PWD/results,dst=/results" \
+  checkpoint-red-runner:0.1.0
+```
+
+In an interactive terminal, verbose mode switches to a live, two-column view of the latest prompts and replies. The header shows phase, elapsed time, target/scan IDs, session counts, turns and timeouts; the final view adds the scan outcome and assessed/successful counts. It adapts to the current terminal size and keeps a bounded working set with only each session's latest exchange; it is not a transcript and does not provide scrollback. Resize the terminal at any time. Full prompts and replies can contain sensitive content.
+
+Without a TTY, including Kubernetes and CI, verbose mode writes JSON trace lines to stdout as before. This makes it suitable for log collection and piping. Omit the variable or set it to `0` to disable verbose output.
 
 | Event | Meaning |
 | --- | --- |
@@ -105,6 +114,7 @@ The worker’s session handler emits trace events for recon and assessment. When
 | `prompt` | The handler received a prompt and is about to call the target adapter. |
 | `reply` | The adapter returned the reply text shown here. |
 | `response_submitted` | The SDK response call returned. This alone does not confirm remote evaluation. |
+| `session_complete` | The SDK finished requesting prompts for this session. |
 | `handler_error` | The handler encountered an error. The event carries a diagnostic category. |
 
 A run that fails before the handler starts a session can show only stage and receipt lines even with verbose logging enabled. Check `diagnostic` in that run’s `summary.json` for the recorded failure category.

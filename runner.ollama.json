@@ -1,11 +1,11 @@
 {
   "mode": "red",
   "red": {
-    "targetName": "local-deepseek-r1",
+    "targetName": "local-deepseek-r1-sg",
     "recon": {
       "timeoutSeconds": 18800,
       "maxSessions": 20,
-      "maxTurns": 20
+      "maxTurns": 10
     },
     "objectives": "all",
     "customObjectives": [
@@ -30,9 +30,9 @@
     "allowHttp": true
   },
   "execution": {
-    "concurrency": 1,
-    "timeoutSeconds": 36600,
-    "requestTimeoutSeconds": 6000
+    "concurrency": 2,
+    "timeoutSeconds": 6600,
+    "requestTimeoutSeconds": 1000
   },
   "output": {
     "directory": "/results",
