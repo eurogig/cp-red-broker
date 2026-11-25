@@ -1,0 +1,14 @@
+{
+  "mode": "red",
+  "red": {
+    "targetId": "REPLACE_WITH_UI_TARGET_ID",
+    "objectives": ["REPLACE_WITH_SAVED_INDIRECT_OBJECTIVE_ID"],
+    "strategy": {"name": "tool-response-poisoning", "numberOfAttacksPerObjective": 1}
+  },
+  "target": {
+    "adapter": "stateful", "url": "https://agent.internal.example/chat",
+    "authEnv": "TARGET_API_KEY", "instrumented": true,
+    "requestField": "message", "sessionField": "sessionId", "responsePath": ["reply"]
+  },
+  "output": {"directory": "/results"}
+}

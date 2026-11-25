@@ -1,0 +1,6 @@
+.git
+.npmrc
+.env
+node_modules
+results
+*.tgz

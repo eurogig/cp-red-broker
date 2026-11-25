@@ -1,0 +1,7 @@
+{
+  "name": "checkpoint-red-runner-sdk-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {"lakera-red-sdk": "0.13.0"}
+}

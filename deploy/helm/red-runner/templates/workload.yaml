@@ -1,0 +1,74 @@
+{{- define "red-runner.jobSpec" -}}
+backoffLimit: 0
+activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+ttlSecondsAfterFinished: 86400
+template:
+  metadata:
+    labels: {app: red-runner}
+  spec:
+    restartPolicy: Never
+    automountServiceAccountToken: false
+    terminationGracePeriodSeconds: 20
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      fsGroup: 10001
+      seccompProfile: {type: RuntimeDefault}
+    containers:
+      - name: runner
+        image: {{ .Values.image | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: {drop: [ALL]}
+        resources:
+          requests: {cpu: 100m, memory: 128Mi}
+          limits: {cpu: "1", memory: 768Mi}
+        env:
+          - name: LAKERA_RED_API_KEY
+            valueFrom:
+              secretKeyRef: {name: {{ .Values.secret | quote }}, key: red-api-key}
+          - name: TARGET_API_KEY
+            valueFrom:
+              secretKeyRef: {name: {{ .Values.secret | quote }}, key: target-api-key}
+          {{- with .Values.extraEnv }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+        volumeMounts:
+          - {name: config, mountPath: /config, readOnly: true}
+          - {name: results, mountPath: /results}
+          {{- with .Values.extraVolumeMounts }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+    volumes:
+      - name: config
+        configMap: {name: {{ .Values.configMap | quote }}}
+      - name: results
+        persistentVolumeClaim: {claimName: {{ .Values.resultsClaim | quote }}}
+      {{- with .Values.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+{{- end }}
+apiVersion: batch/v1
+{{- if .Values.schedule }}
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      {{- include "red-runner.jobSpec" . | nindent 6 }}
+{{- else }}
+kind: Job
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  {{- include "red-runner.jobSpec" . | nindent 2 }}
+{{- end }}

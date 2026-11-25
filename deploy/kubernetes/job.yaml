@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: red-runner
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 6000
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app: red-runner}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: runner
+          image: checkpoint-red-runner:0.1.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 768Mi}
+          env:
+            - name: LAKERA_RED_API_KEY
+              valueFrom: {secretKeyRef: {name: red-runner, key: red-api-key}}
+            - name: TARGET_API_KEY
+              valueFrom: {secretKeyRef: {name: red-runner, key: target-api-key}}
+          volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+            - {name: results, mountPath: /results}
+      volumes:
+        - name: config
+          configMap: {name: red-runner}
+        - name: results
+          persistentVolumeClaim: {claimName: red-runner-results}

@@ -1,0 +1,10 @@
+image: checkpoint-red-runner:0.1.0
+schedule: ""
+configMap: red-runner
+secret: red-runner
+resultsClaim: red-runner-results
+activeDeadlineSeconds: 6000
+# Extra environment (e.g. HTTPS_PROXY / NODE_EXTRA_CA_CERTS); no secret values.
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []

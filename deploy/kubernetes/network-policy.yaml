@@ -1,0 +1,11 @@
+# Ingress denied. Egress must be customized for your target, DNS, and egress proxy.
+# Apply before Jobs. This safe default deliberately blocks all egress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: red-runner-isolation}
+spec:
+  podSelector:
+    matchLabels: {app: red-runner}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []
